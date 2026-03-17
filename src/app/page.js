@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import Editor from "@monaco-editor/react";
+import { Play, Terminal, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  const [code, setCode] = useState(`#include <iostream>
+  const defaultCode = `#include <iostream>
 using namespace std;
 
 int main() {
@@ -11,137 +13,231 @@ int main() {
     cin >> a >> b;
     cout << a + b;
     return 0;
-}`);
-  const [input, setInput] = useState("5 7");
+}`;
+
+  // 🔥 Load from localStorage
+  const [code, setCode] = useState("");
+  const [input, setInput] = useState("");
+  const [file, setFile] = useState(null);
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ✅ Run Code
+  useEffect(() => {
+    const savedCode = localStorage.getItem("code");
+    const savedInput = localStorage.getItem("input");
+
+    setCode(savedCode || defaultCode);
+    setInput(savedInput || "5 7");
+  }, []);
+
+  // 💾 Auto-save
+  useEffect(() => {
+    localStorage.setItem("code", code);
+  }, [code]);
+
+  useEffect(() => {
+    localStorage.setItem("input", input);
+  }, [input]);
+
+  // ⌨️ Keyboard Shortcut (Ctrl + Enter)
+  useEffect(() => {
+    const handleKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        runCode();
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  });
+
   const runCode = async () => {
     setLoading(true);
     setOutput("");
 
     try {
-      const res = await fetch("/api/run", {
+      const formData = new FormData();
+      formData.append("code", code);
+
+      if (file) formData.append("inputFile", file);
+      else formData.append("input", input);
+
+      const res = await fetch("/run", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code, input }),
+        body: formData,
       });
 
       const data = await res.json();
-      setOutput(data.output || data.error);
+      setOutput(data.error || data.output);
     } catch {
-      setOutput("Error running code");
+      setOutput("Server error. Please try again.");
     }
 
     setLoading(false);
   };
 
-  // ✅ File Upload Handler
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const uploadedFile = e.target.files[0];
+    if (!uploadedFile) return;
 
-    if (!file.name.endsWith(".txt")) {
-      alert("Please upload a .txt file");
+    if (!uploadedFile.name.endsWith(".txt")) {
+      alert("Upload a .txt file only");
       return;
     }
 
+    setFile(uploadedFile);
+
     const reader = new FileReader();
-
-    reader.onload = (event) => {
-      setInput(event.target.result);
-    };
-
-    reader.readAsText(file);
+    reader.onload = (event) => setInput(event.target.result);
+    reader.readAsText(uploadedFile);
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
-      {/* Header */}
-      <div className="p-4 bg-blue-600 text-white text-lg font-semibold flex justify-between items-center">
-        <span>C++ Online Compiler</span>
+    <div className="h-screen flex flex-col bg-[#0f172a] text-gray-200">
+
+      {/* HEADER */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-700 bg-[#020617]">
+        <div className="flex flex-col">
+          <h1 className="text-lg font-semibold">🚀 C++ Compiler</h1>
+          <span className="text-xs text-gray-500">
+            Supports large testcases • Ctrl + Enter to run
+          </span>
+        </div>
+
         <button
           onClick={runCode}
           disabled={loading}
-          className={`px-4 py-2 rounded ${loading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-white text-blue-600 hover:bg-gray-200"
-            }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium ${
+            loading
+              ? "bg-gray-500 cursor-not-allowed"
+              : "bg-green-500 hover:bg-green-600"
+          }`}
         >
-          {loading ? "Running..." : "Run Code"}
+          <Play size={16} />
+          {loading ? "Running..." : "Run"}
         </button>
       </div>
 
-      {/* Main Layout */}
-      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+      {/* MAIN */}
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* LEFT: Code Editor */}
-        <div className="flex-1 flex flex-col p-2">
-          <div className="bg-white rounded shadow flex flex-col h-full">
-            <div className="p-2 font-semibold border-b text-black">Code</div>
-            <textarea
-              className="flex-1 p-3 font-mono text-sm outline-none resize-none bg-white text-black"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
+        {/* MONACO EDITOR */}
+        <div className="flex-1 flex flex-col border-r border-gray-700">
+          <div className="px-4 py-2 text-sm bg-[#020617] border-b border-gray-700">
+            📝 Code Editor
           </div>
+
+          <Editor
+            height="100%"
+            defaultLanguage="cpp"
+            value={code}
+            theme="vs-dark"
+            onChange={(value) => setCode(value || "")}
+            options={{
+              fontSize: 14,
+              minimap: { enabled: false },
+              wordWrap: "on",
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+            }}
+          />
         </div>
 
-        {/* RIGHT: Input + Output */}
-        <div className="w-full md:w-[40%] flex flex-col p-2 gap-2">
+        {/* RIGHT PANEL */}
+        <div className="w-[40%] flex flex-col">
 
-          {/* Input */}
-          <div className="bg-white rounded shadow flex flex-col h-[40%]">
-            <div className="p-2 font-semibold border-b text-black flex justify-between items-center">
-              <span>Input</span>
+          {/* INPUT PANEL */}
+          <div className="h-[40%] flex flex-col border-b border-gray-700">
 
-              {/* Upload Button */}
-              <label className="text-sm bg-blue-500 text-white px-2 py-1 rounded cursor-pointer hover:bg-blue-600">
-                Upload .txt
-                <input
-                  type="file"
-                  accept=".txt"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </label>
+            <div className="flex justify-between items-center px-4 py-2 bg-[#020617] border-b border-gray-700">
+              <span className="text-sm font-medium">📥 Testcase Input</span>
+
+              <div className="flex gap-2 text-xs">
+
+                <button
+                  onClick={() => setInput("5 7")}
+                  className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                >
+                  Sample
+                </button>
+
+                <button
+                  onClick={() => {
+                    setInput("");
+                    setFile(null);
+                  }}
+                  className="px-2 py-1 bg-red-500 rounded hover:bg-red-600"
+                >
+                  Clear
+                </button>
+
+                <label className="flex items-center gap-1 bg-blue-500 px-2 py-1 rounded cursor-pointer hover:bg-blue-600">
+                  <Upload size={14} />
+                  Upload
+                  <input
+                    type="file"
+                    accept=".txt"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
 
-            <textarea
-              className="flex-1 p-3 font-mono text-sm outline-none resize-none bg-white text-black"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-            />
+            <div className="flex flex-1 overflow-hidden">
+
+              {/* LINE NUMBERS */}
+              <div className="bg-[#020617] text-gray-500 text-xs px-2 py-3 select-none">
+                {input.split("\n").map((_, i) => (
+                  <div key={i}>{i + 1}</div>
+                ))}
+              </div>
+
+              {/* TEXTAREA */}
+              <textarea
+                className="flex-1 p-3 font-mono text-sm bg-[#0f172a] outline-none resize-none text-gray-200"
+                placeholder={`Example:
+5 7
+
+Input format:
+a b`}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setFile(null);
+                }}
+              />
+            </div>
+
+            <div className="text-xs text-gray-500 px-3 py-1 bg-[#020617] border-t border-gray-700">
+              💾 Auto-saved 🐱‍🏍Handles large inputs efficiently
+            </div>
           </div>
 
-          {/* Output */}
-          <div className="bg-black text-green-400 rounded shadow flex flex-col h-[60%] relative">
-            <div className="p-2 font-semibold border-b border-gray-700 text-white">
-              Output
+          {/* OUTPUT PANEL */}
+          <div className="flex-1 flex flex-col relative">
+            <div className="flex items-center gap-2 px-4 py-2 bg-[#020617] border-b border-gray-700">
+              <Terminal size={16} />
+              <span className="text-sm">Output</span>
             </div>
 
-            {/* Loader Overlay */}
             {loading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-white">Executing...</span>
-                </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+                <div className="animate-spin w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full"></div>
               </div>
             )}
 
-            <pre className="flex-1 p-3 overflow-auto whitespace-pre-wrap">
-              {output}
+            <pre className="flex-1 p-4 overflow-auto text-green-400 font-mono text-sm">
+              {output || "// Output will appear here"}
             </pre>
           </div>
         </div>
       </div>
-      {/* Footer */}
-      <div className="text-center text-sm text-gray-600 py-2 bg-white border-t">
-        Developed by <span className="font-semibold">Sunandhit Gupta</span>
+
+      {/* FOOTER */}
+      <div className="text-center text-xs text-gray-500 py-2 border-t border-gray-700 bg-[#020617]">
+        Built by <span className="text-gray-300">Sunandhit Gupta</span>
       </div>
     </div>
   );
