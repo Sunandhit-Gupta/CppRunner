@@ -4,6 +4,7 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+require("dotenv").config();
 
 const { runCppFile } = require("./runner"); // ONLY this function needed
 
@@ -71,8 +72,8 @@ app.prepare().then(() => {
   // =========================================
   // ✅ START SERVER
   // =========================================
-  const PORT = 3000;
-  server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
 });
